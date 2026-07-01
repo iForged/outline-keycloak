@@ -20,10 +20,6 @@ const OUTLINE_SIGNING_KEY = await crypto.subtle.importKey(
 // Leave empty ("") to sync all groups (original behaviour).
 const GROUP_SYNC_PREFIX = Deno.env.get("GROUP_SYNC_PREFIX") ?? "";
 
-// Keycloak user attribute holding an avatar URL to push into Outline.
-// Leave empty to disable avatar sync entirely.
-const KEYCLOAK_AVATAR_ATTRIBUTE = Deno.env.get("KEYCLOAK_AVATAR_ATTRIBUTE") ?? "discord_avatar";
-
 let KC_TOKEN = null;
 let KC_TOKEN_EXPIRES_AT = 0;
 
@@ -178,38 +174,6 @@ async function handleSignin(model: any) {
       if (!group) throw new Error("Invalid group: " + name);
       await outlineRequest("/groups.remove_user", { id: group.id, userId });
     }
-  }
-
-  // --- Avatar sync ---
-  await syncAvatar(outlineUser, keyloakUser, userId);
-}
-
-async function syncAvatar(outlineUser: any, keyloakUser: any, userId: string) {
-  if (!KEYCLOAK_AVATAR_ATTRIBUTE) return;
-
-  const attrValues = keyloakUser.attributes?.[KEYCLOAK_AVATAR_ATTRIBUTE];
-  const avatarUrl = Array.isArray(attrValues) ? attrValues[0] : undefined;
-
-  if (!avatarUrl) {
-    logger.info(
-      ` skip avatar sync for ${outlineUser.email}: no ${KEYCLOAK_AVATAR_ATTRIBUTE} attribute set`,
-    );
-    return;
-  }
-
-  if (avatarUrl === outlineUser.avatarUrl) {
-    logger.info(` skip avatar sync for ${outlineUser.email}: already up to date`);
-    return;
-  }
-
-  try {
-    logger.info(` updating avatar for ${outlineUser.email} -> ${avatarUrl}`);
-    await outlineRequest("/users.update", {
-      id: userId,
-      avatarUrl,
-    });
-  } catch (err) {
-    logger.warn(`failed to update avatar for ${outlineUser.email}: `, err);
   }
 }
 
