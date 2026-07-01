@@ -16,9 +16,16 @@ const OUTLINE_SIGNING_KEY = await crypto.subtle.importKey(
 );
 
 // --- New config ---
-// Only groups whose name starts with this prefix are synced from Keycloak.
-// Leave empty ("") to sync all groups (original behaviour).
-const GROUP_SYNC_PREFIX = Deno.env.get("GROUP_SYNC_PREFIX") ?? "";
+// Only groups whose name starts with one of these prefixes are synced from Keycloak.
+// Comma-separated, e.g. "wiki_,docs_". Leave empty ("") to sync all groups (original behaviour).
+const GROUP_SYNC_PREFIXES = (Deno.env.get("GROUP_SYNC_PREFIX") ?? "")
+  .split(",")
+  .map((p) => p.trim())
+  .filter((p) => p.length > 0);
+
+const matchesSyncPrefix = (name: string) =>
+  GROUP_SYNC_PREFIXES.length === 0 ||
+  GROUP_SYNC_PREFIXES.some((prefix) => name.startsWith(prefix));
 
 let KC_TOKEN = null;
 let KC_TOKEN_EXPIRES_AT = 0;
@@ -125,15 +132,13 @@ async function handleSignin(model: any) {
   const rawKeycloakGroupsNames = keycloakGroups.map((g) => g.name);
 
   // --- Group prefix filtering ---
-  // Only groups matching GROUP_SYNC_PREFIX are considered "managed" by this sync.
-  // Groups outside the prefix (in either Keycloak or Outline) are left untouched.
-  const keycloakGroupsNames = GROUP_SYNC_PREFIX
-    ? rawKeycloakGroupsNames.filter((g) => g.startsWith(GROUP_SYNC_PREFIX))
-    : rawKeycloakGroupsNames;
+  // Only groups matching one of GROUP_SYNC_PREFIXES are considered "managed" by this sync.
+  // Groups outside all prefixes (in either Keycloak or Outline) are left untouched.
+  const keycloakGroupsNames = rawKeycloakGroupsNames.filter(matchesSyncPrefix);
 
-  const managedOutlineUserGroupsNames = GROUP_SYNC_PREFIX
-    ? outlineUserGroupsNames.filter((g) => g.startsWith(GROUP_SYNC_PREFIX))
-    : outlineUserGroupsNames;
+  const managedOutlineUserGroupsNames = outlineUserGroupsNames.filter(
+    matchesSyncPrefix,
+  );
 
   const groupsToCreate = keycloakGroupsNames.filter((g) =>
     !outlineAllGroupsNames.includes(g)
